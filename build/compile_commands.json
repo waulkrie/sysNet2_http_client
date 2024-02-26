@@ -1,0 +1,7 @@
+[
+{
+  "directory": "/home/anon/projects/sysNet2_http_client/build",
+  "command": "/usr/bin/g++ -g -std=gnu++14 -o CMakeFiles/sysNet2_http_client.dir/main.cpp.o -c /home/anon/projects/sysNet2_http_client/main.cpp",
+  "file": "/home/anon/projects/sysNet2_http_client/main.cpp"
+}
+]

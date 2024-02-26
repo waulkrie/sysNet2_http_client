@@ -1,0 +1,3 @@
+/home/anon/projects/sysNet2_http_client/build/CMakeFiles/sysNet2_http_client.dir
+/home/anon/projects/sysNet2_http_client/build/CMakeFiles/edit_cache.dir
+/home/anon/projects/sysNet2_http_client/build/CMakeFiles/rebuild_cache.dir
