@@ -17,12 +17,24 @@
 
 using namespace std;
 
-tuple<string,string, string> get_url(string url) 
+string get_headers(string str, string host)
+{
+    string ret;
+    ret = "GET " + str + " HTTP/1.1\r\n";
+    ret += "Host: " + host + "\r\n";
+    ret += "Accept: text/html\r\n";
+    ret += "User-Agent: SnailHtml\r\n";
+    ret += "Connection: close\r\n";
+    ret += "\r\n";
+    return ret;
+}
+
+tuple<string, string, string> get_url(string url) 
 {
     string host;
     string path;
     string port = "80";
-    cout << "url: " << url << endl;
+
     // Parse the user arg for url
     size_t begin = url.find("://");
     if (begin == string::npos)
@@ -32,28 +44,43 @@ tuple<string,string, string> get_url(string url)
     else
     {
         begin += 3;
+
     }
-    size_t end = url.find("/", begin);
-    if ( end == string::npos )
+
+    size_t port_start = url.find(":", begin);
+    size_t path_start = url.find("/", begin);
+    if ( path_start == string::npos )
     {
         path = "/";
     }
     else
     {
-        path = url.substr(end, url.length()); // pull uri
+        path = url.substr(path_start); // pull uri
+        host = url.substr(begin, path_start - begin); // pull host
     }
-    host = url.substr(begin, end);
-    size_t portStart = url.find(":", begin);
+
     // if we find a port number
-    if ( portStart != string::npos )
+    if ( port_start != string::npos && port_start < path_start )
     {
-        port = url.substr(begin, path.front());
-        cout << "2 ret" << endl;
-        return make_tuple(host,path, port);
+        port = url.substr(port_start + 1, path_start - port_start - 1);
+        host = url.substr(begin, port_start - begin);
     }
-    cout << "2 ret" << endl;
+    else
+    {
+        host = url.substr(begin, path_start - begin);
+    }
+
     return make_tuple(host, path, port);
 
+}
+
+string get_ip4_or_ip6(string url)
+{
+    addrinfo* server = new addrinfo();
+    getaddrinfo(url.c_str(), "80", 0, &server);
+    char host[NI_MAXHOST];
+    getnameinfo(server->ai_addr, server->ai_addrlen, host, sizeof(host), NULL, 0, NI_NUMERICHOST);
+    return string(host);
 }
 
 int main(int argc, char *argv[]) 
@@ -65,25 +92,67 @@ int main(int argc, char *argv[])
     }
 
     auto [url, path, port] = get_url(argv[1]);
+    cout << "url : " << url << endl;
+    cout << "path: " << path << endl;
+    cout << "port: " << port << endl;
+
+
     // get server ip
     addrinfo* server = new addrinfo();
+    addrinfo hints = addrinfo();
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+
     // memset(server, 0, sizeof(server));
-    getaddrinfo(url.c_str(), port.c_str(), 0, &server);
+    getaddrinfo(url.c_str(), port.c_str(), &hints, &server);
+    // Correcting the IP address printing
+    // After calling getaddrinfo and ensuring server is not nullptr:
+    char host[NI_MAXHOST];
+    getnameinfo(server->ai_addr, server->ai_addrlen, host, sizeof(host),
+     NULL, 0, NI_NUMERICHOST);
+
+    cout << "IP Address: " << host << endl;
+    cout << "Address Family: " << server->ai_family << endl;
     cout << "url: " << url << ":" << port << endl;
-    cout << "ip : " << inet_ntoa( ((sockaddr_in*)&server)->sin_addr) <<":"<< ntohs( ((sockaddr_in*)&server)->sin_port) << endl;
-    int server_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    int status = connect( server_fd, (sockaddr*)&server->ai_addr, server->ai_addrlen );
-    cout << "connecting to " << url << endl;
-    if (server == nullptr)
+
+
+    int server_fd = socket( server->ai_family, SOCK_STREAM, IPPROTO_TCP);
+    cout << "server_fd: " << server_fd << endl;
+    cout << "server->ai_family: " << server->ai_family << endl;
+    cout << "server->ai_protocol: " << server->ai_protocol << endl;
+    cout << "server->ai_socktype: " << server->ai_socktype << endl;
+
+    int status = connect( server_fd, server->ai_addr, server->ai_addrlen );
+    cout << "connecting to " << host << endl;
+    if ( status == -1 )
     {
         cout << "failed to connect to " << url << endl;
+        perror("connect");
     }
+    freeaddrinfo(server);
     string msg = "Hello world\n\n";
     char* buff[1024] = {0};
-    write(server_fd, msg.c_str(), msg.length());
-    read(server_fd, buff, 1024);
-    cout << buff << endl;
+    string headers = get_headers(path, url);
 
+    // copy payload after headers
+    memcpy(buff, headers.c_str(), headers.length());
+    memcpy(buff + headers.length(), msg.c_str(), msg.length()); 
+    printf("%s\n", buff);
+    status = write(server_fd, buff, msg.length() +  headers.length());
+    if (status < 0)
+    {
+        cout << "failed to write to server" << endl;
+    }
+    status = read(server_fd, buff, 1024);
+    if (status < 0)
+    {
+        cout << "failed to read from server" << endl;
+    }
+
+    printf("%s\n", buff);
+    cout << "closing connection" << endl;
+    close(server_fd);
 
     return 0;
 }
